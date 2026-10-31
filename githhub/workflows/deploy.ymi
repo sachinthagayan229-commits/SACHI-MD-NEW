@@ -1,0 +1,30 @@
+name: SACHI-MD Auto Deploy
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+            - name: Checkout
+        uses: actions/checkout@v4
+      
+            - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+            - name: Install Dependencies
+        run: npm install
+      
+            - name: Check Bot
+        run: node -c index.js && node -c pair.js && node -c config.js
+      
+            - name: Deploy to Render (Auto)
+        if: success()
+        run: |
+          echo "✅ Build Success - Ready to Deploy!"
+          echo "Render will auto-deploy from GitHub"
