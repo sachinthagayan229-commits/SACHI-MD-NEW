@@ -19,7 +19,7 @@ on:
 jobs:
   bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 350
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -27,23 +27,44 @@ jobs:
           node-version: '20'
       - run: npm install
 
+      - name: Fix Pair.js for GitHub Actions
+        if: ${{ inputs.action == 'pair' }}
+        run: |
+          cat > pair.js << 'EOF'
+          const { default: makeWASocket, useMultiFileAuthState, delay } = require("@whiskeysockets/baileys");
+          const pino = require("pino");
+          async function getPair() {
+            const number = process.argv[2];
+            if (!number) { console.log("❌ Number missing!"); process.exit(1); }
+            console.log(`Starting pairing for: ${number}`);
+            const { state, saveCreds } = await useMultiFileAuthState("./session");
+            const sock = makeWASocket({
+              logger: pino({ level: "silent" }),
+              auth: state,
+              printQRInTerminal: false,
+              browser: ["SACHI-MD", "Chrome", "1.0"]
+            });
+            if (!sock.authState.creds.registered) {
+              await delay(2000);
+              const cleanNum = number.replace(/[^0-9]/g, "");
+              const code = await sock.requestPairingCode(cleanNum);
+              console.log("\n=================================");
+              console.log(`✅ YOUR PAIR CODE IS: ${code}`);
+              console.log("=================================\n");
+            }
+            sock.ev.on("creds.update", saveCreds);
+            await delay(120000);
+            process.exit(0);
+          }
+          getPair();
+          EOF
+          echo "✅ Fixed pair.js created"
+
       - name: Get Pair Code
         if: ${{ inputs.action == 'pair' }}
         run: |
           echo "Number: ${{ inputs.number }}"
-          ls -la
-          if [ -f pair.js ]; then
-            node pair.js ${{ inputs.number }}
-          elif [ -f pairing.js ]; then
-            node pairing.js ${{ inputs.number }}
-          elif [ -f src/pair.js ]; then
-            node src/pair.js ${{ inputs.number }}
-          else
-            echo "Trying npm way..."
-            npm start &
-            sleep 10
-            cat *.log || true
-          fi
+          node pair.js ${{ inputs.number }}
 
       - name: Run Bot
         if: ${{ inputs.action == 'run' }}
