@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       number:
-        description: 'WhatsApp Number (947XXXXXXXX)'
+        description: 'WhatsApp Number (94778936490)'
         required: true
         type: string
 
