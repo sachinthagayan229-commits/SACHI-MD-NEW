@@ -1,22 +1,40 @@
-name: GET PAIR CODE
+const { default: makeWASocket, useMultiFileAuthState, delay } = require("@whiskeysockets/baileys");
+const pino = require("pino");
 
-on:
-  workflow_dispatch:
-    inputs:
-      number:
-        description: 'WhatsApp Number (94778936490)'
-        required: true
-        type: string
+async function getPair() {
+    const number = process.argv[2];
+    if (!number) {
+        console.log("❌ Number not provided! Usage: node pair.js 947XXXXXXXX");
+        process.exit(1);
+    }
+    
+    const { state, saveCreds } = await useMultiFileAuthState("./session");
+    
+    const sock = makeWASocket({
+        logger: pino({ level: "silent" }),
+        auth: state,
+        printQRInTerminal: false,
+        browser: ["SACHI-MD", "Chrome", "1.0"]
+    });
 
-jobs:
-  pair:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - run: npm install
-      
-      - name: Get Pair Code
-        run: node pair.js ${{ inputs.number }}
+    if (!sock.authState.creds.registered) {
+        await delay(1500);
+        const code = await sock.requestPairingCode(number.replace(/[^0-9]/g, ""));
+        console.log("\n=================================");
+        console.log(`✅ YOUR PAIR CODE: ${code}`);
+        console.log("=================================");
+        console.log("Go to WhatsApp > Linked Devices > Link with phone number");
+        console.log(`Enter code: ${code}`);
+        console.log("=================================\n");
+    }
+
+    sock.ev.on("creds.update", saveCreds);
+    
+    // Keep alive for 2 mins to allow pairing
+    setTimeout(() => {
+        console.log("Session saved! You can now run bot with 'run' option");
+        process.exit(0);
+    }, 120000);
+}
+
+getPair();
