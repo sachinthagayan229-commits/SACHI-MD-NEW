@@ -1,0 +1,46 @@
+name: SACHI-MD PAIR & RUN
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Select Action'
+        required: true
+        default: 'pair'
+        type: choice
+        options:
+          - pair
+          - run
+      number:
+        description: 'Number for pair (947XXXXXXXX) - only for pair'
+        required: false
+        type: string
+
+jobs:
+  bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install
+        run: npm install
+
+      - name: Get Pair Code
+        if: ${{ inputs.action == 'pair' }}
+        run: |
+          echo "Getting Pair Code for ${{ inputs.number }}"
+          node pair.js ${{ inputs.number }}
+
+      - name: Run Bot
+        if: ${{ inputs.action == 'run' }}
+        run: |
+          echo "Starting SACHI-MD Bot..."
+          echo "Bot will run 6 hours!"
+          npm start
