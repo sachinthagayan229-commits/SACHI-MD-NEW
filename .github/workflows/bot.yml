@@ -12,7 +12,7 @@ on:
           - pair
           - run
       number:
-        description: 'Number 947XXXXXXXX'
+        description: 'Number 947XXXXXXXX (no +)'
         required: false
         type: string
 
@@ -30,26 +30,27 @@ jobs:
       - name: Get Pair Code
         if: ${{ inputs.action == 'pair' }}
         run: |
+          rm -rf session
           cat > pair.cjs << 'EOF'
           const { default: makeWASocket, useMultiFileAuthState, delay } = require("@whiskeysockets/baileys");
           const pino = require("pino");
           async function start() {
             const number = process.argv[2];
-            console.log("Pairing for:", number);
+            const clean = number.replace(/[^0-9]/g,"");
+            console.log("Requesting code for:", clean);
             const { state, saveCreds } = await useMultiFileAuthState("./session");
             const sock = makeWASocket({
               logger: pino({ level: "silent" }),
               auth: state,
               browser: ["SACHI-MD", "Chrome", "1.0"]
             });
-            if (!sock.authState.creds.registered) {
-              await delay(2000);
-              const code = await sock.requestPairingCode(number.replace(/[^0-9]/g,""));
-              console.log("\n==============================");
-              console.log("✅ PAIR CODE: " + code);
-              console.log("==============================\n");
-            }
             sock.ev.on("creds.update", saveCreds);
+            await delay(3000);
+            const code = await sock.requestPairingCode(clean);
+            console.log("\n==============================");
+            console.log("✅ CODE: " + code);
+            console.log("Enter FAST within 30 sec!");
+            console.log("==============================\n");
             await delay(120000);
           }
           start();
@@ -58,4 +59,6 @@ jobs:
 
       - name: Run Bot
         if: ${{ inputs.action == 'run' }}
-        run: npm start
+        run: |
+          rm -rf session
+          npm start
