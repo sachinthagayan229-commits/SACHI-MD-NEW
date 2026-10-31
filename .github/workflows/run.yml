@@ -1,3 +1,4 @@
+
 name: SACHI-MD 5H AUTO RESTART
 
 on:
@@ -5,16 +6,20 @@ on:
   schedule:
     - cron: '0 */5 * * *'
 
+concurrency:
+  group: sachi-md-bot
+  cancel-in-progress: true
+
 jobs:
   run:
     runs-on: ubuntu-latest
     timeout-minutes: 290
 
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 20
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -22,18 +27,28 @@ jobs:
       - name: Install Dependencies
         run: npm install --no-audit
 
-      - name: Setup Session File
+      - name: Restore Session
+        uses: actions/cache/restore@v4
+        with:
+          path: session
+          key: sachi-session-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            sachi-session-
+
+      - name: Run Bot
         run: |
-          mkdir -p auth_info_baileys
-          mkdir -p session
-          node -e "
-          import fs from 'fs';
-          const sid = 'SACHI-MD~eyJub2lzZUtleSI6eyJwcml2YXRlIjp7InR5cGUiOiJCdWZmZXIiLCJkYXRhIjoiaUJQVlJzZDN4YzZyL0JaMTViSHRHVUlWUndFaTBQblJBSHdGaXRLTlYzYz0ifSwicHVibGljIjp7InR5cGUiOiJCdWZmZXIiLCJkYXRhIjoiampmeXZubXJ4ZmZRUjNMalZjbTJPSmZ6NUk4ODloTnBiYWRkN2hMWngxcz0ifX0sInBhaXJpbmdFcGhlbWVyYWxLZXlQYWlyIjp7InByaXZhdGUiOnsidHlwZSI6IkJ1ZmZlciIsImRhdGEiOiJZTVZOQmxFRmZnSFhERWE5akFPd0c2Ulg4K1Q2S3hFR2JRNGpOVExoTVhvPSJ9LCJwdWJsaWMiOnsidHlwZSI6IkJ1ZmZlciIsImRhdGEiOiJiQkwzQktrYUp0RHFqUE1TdS9sUWkzVXJ1Um0xNFBaeXVpU05GNGZDYjA0PSJ9fSwic2lnbmVkSWRlbnRpdHlLZXkiOnsicHJpdmF0ZSI6eyJ0eXBlIjoiQnVmZmVyIiwiZGF0YSI6IktLQmdXNUtWMFAwNG5DMFFKa25sd1JsZWlqdCttVmVLMUVURnpNV2tySG89In0sInB1YmxpYyI6eyJ0eXBlIjoiQnVmZmVyIiwiZGF0YSI6ImpUbEYxbVpNbVhqNW02b2xsOUpFZUlIc3dLaGhFRXlLTmZSVkw2L0JXU1U9In19LCJzaWduZWRQcmVLZXkiOnsia2V5UGFpciI6eyJwcml2YXRlIjp7InR5cGUiOiJCdWZmZXIiLCJkYXRhIjoiMkloNy9zOXdQTTZYWHgrSkJrWG5LemxFcjFOaDhYOVRLUmx1R0lTdE5HMD0ifSwicHVibGljIjp7InR5cGUiOiJCdWZmZXIiLCJkYXRhIjoiSE5UQUhxOVd5SlBCS3hMa0pSQ2NaNXVKbERpWExkeHIxa2xXYncrM215ST0ifX0sInNpZ25hdHVyZSI6eyJ0eXBlIjoiQnVmZmVyIiwiZGF0YSI6IkVnZ3Z1VWFjYjR5cFF0NG41OGx6UFFCNnRFZStBam1OTm1FVTVOMElDWTNQQnpBbC9zYWhlYUszZWxiTzlzSUFabXEwMXVid3dneVA5VXpHTWFYeENRPT0ifSwia2V5SWQiOjF9LCJyZWdpc3RyYXRpb25JZCI6MzksImFkdlNlY3JldEtleSI6IlpGQ0dCdFhhMEpJSnlwVFN2V1hDT2xzTnhaUkY4UTVrb0R6eUJwZGJaa1U9IiwicHJvY2Vzc2VkSGlzdG9yeU1lc3NhZ2VzIjpbXSwibmV4dFByZUtleUlkIjo4MTMsImZpcnN0VW51cGxvYWRlZFByZUtleUlkIjo4MTMsImFjY291bnRTeW5jQ291bnRlciI6MCwiYWNjb3VudFNldHRpbmdzIjp7InVuYXJjaGl2ZUNoYXRzIjpmYWxzZX0sInJlZ2lzdGVyZWQiOnRydWUsInBhaXJpbmdDb2RlIjoiV1ZZMlZUVFAiLCJsYXN0UHJvcEhhc2giOiIyVzNlNTkiLCJyb3V0aW5nSW5mbyI6eyJ0eXBlIjoiQnVmZmVyIiwiZGF0YSI6IkNBMElBZ2dTIn0sIm1lIjp7ImlkIjoiOTQ3Nzg5MzY0OTA6NTVAcy53aGF0c2FwcC5uZXQiLCJsaWQiOiI2MzYwMDMxMTk1MTU1ODo1NUBsaWQifSwiYWNjb3VudCI6eyJkZXRhaWxzIjoiQ09pYzZjd0NFSmJ5bDljR0dBSWdBQ2dBIiwiYWNjb3VudFNpZ25hdHVyZUtleSI6IlZFS1NhRTNLWkR3YWZDWTB0N0k1bTNGTlJYODA1YlBYL3dFSWVMbFVrSDg9IiwiYWNjb3VudFNpZ25hdHVyZSI6Ims0aXQ5ZzJnYy92emdIZWZKZWZtNmUwai9PS0k1QU5VY3QySUY4WkppTlVCUUI1NlQ5cmJWenZsak84MGk5Z3NKTnQwOTljaWo4WUxPaXhrajE5RENBPT0iLCJkZXZpY2VTaWduYXR1cmUiOiJiaS83cDZmQXJNYlA3dFU2dVRoY3BETFlaTkJXNnhOeVpFaENPV1JreFlhYVJOcmxMMDFEVUp2TDA3RkF5Qzg2dGtydndLZWtsWHV3bVVuU21TL1hEZz09In0sInNpZ25hbElkZW50aXRpZXMiOlt7ImlkZW50aWZpZXIiOnsibmFtZSI6IjYzNjAwMzExOTUxNTU4OjU1QGxpZCIsImRldmljZUlkIjowfSwiaWRlbnRpZmllcktleSI6eyJ0eXBlIjoiQnVmZmVyIiwiZGF0YSI6IkJWUkNrbWhOeW1ROEdud21OTGV5T1p0eFRVVi9OT1d6MS84QkNIaTVWSkIvIn19XSwicGxhdGZvcm0iOiJhbmRyb2lkIiwibGFzdEFjY291bnRTeW5jVGltZXN0YW1wIjoxNzkzNDU2NDExfQ==';
-          const b64 = sid.split('~')[1];
-          const json = Buffer.from(b64, 'base64').toString();
-          fs.writeFileSync('./auth_info_baileys/creds.json', json);
-          fs.writeFileSync('./session/creds.json', json);
-          console.log('Session file created ✅');
-          "
-      - name: Run SACHI-MD
-        run: node index.js
+          set +e
+          timeout 280m npm start
+          code=$?
+          if [ "$code" -eq 124 ]; then
+            echo "Scheduled restart"
+            exit 0
+          fi
+          exit "$code"
+
+      - name: Save Session
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: session
+          key: sachi-session-${{ github.run_id }}-${{ github.run_attempt }}
