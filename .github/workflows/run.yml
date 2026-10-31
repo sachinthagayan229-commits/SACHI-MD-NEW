@@ -1,4 +1,4 @@
-name: SACHI-MD RUN - AUTO 5H
+name: SACHI-MD 5H AUTO RESTART
 
 on:
   workflow_dispatch:
@@ -11,19 +11,16 @@ jobs:
     timeout-minutes: 290
     
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      
-      - name: Install Dependencies
-        run: |
-          rm -rf node_modules package-lock.json
-          npm install
-      
-      - name: Run SACHI-MD Bot
-        env:
-          SESSION_ID: SACHI-MD~eyJub2lzZUtleSI6eyJwcml2YXRlIjp7InR5cGUiOiJCdWZmZXIiLCJkYXRhIjoiaUJQVlJzZDN4YzZyL0JaMTViSHRHVUlWUndFaTBQblJBSHdGaXRLTlYzYz0ifSwicHVibGljIjp7InR5cGUiOiJCdWZmZXIiLCJkYXRhIjoiampmeXZubXJ4ZmZRUjNMalZjbTJPSmZ6NUk4ODloTnBiYWRkN2hMWngxcz0ifX0sInBhaXJpbmdFcGhlbWVyYWxLZXlQYWlyIjp7InByaXZhdGUiOnsidHlwZSI6IkJ1ZmZlciIsImRhdGEiOiJZTVZOQmxFRmZnSFhERWE5akFPd0c2Ulg4K1Q2S3hFR2JRNGpOVExoTVhvPSJ9LCJwdWJsaWMiOnsidHlwZSI6IkJ1ZmZlciIsImRhdGEiOiJiQkwzQktrYUp0RHFqUE1TdS9sUWkzVXJ1Um0xNFBaeXVpU05GNGZDYjA0PSJ9fSwic2lnbmVkSWRlbnRpdHlLZXkiOnsicHJpdmF0ZSI6eyJ0eXBlIjoiQnVmZmVyIiwiZGF0YSI6IktLQmdXNUtWMFAwNG5DMFFKa25sd1JsZWlqdCttVmVLMUVURnpNV2tySG89In0sInB1YmxpYyI6eyJ0eXBlIjoiQnVmZmVyIiwiZGF0YSI6ImpUbEYxbVpNbVhqNW02b2xsOUpFZUlIc3dLaGhFRXlLTmZSVkw2L0JXU1U9In19LCJzaWduZWRQcmVLZXkiOnsia
+
+      - name: Install
+        run: npm install
+
+      - name: Run Bot
+        run: node index.js
