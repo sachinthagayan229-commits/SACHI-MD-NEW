@@ -1,6 +1,6 @@
 export default {
   botName: "SACHI-MD",
-  ownerNumber: "947XXXXXXXX",
+  ownerNumber: "9477896490",
   ownerName: "Sachi",
   prefix: ".",
   dashboardPort: 10000,
