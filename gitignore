@@ -1,5 +1,5 @@
-node_modules
-session
-session/*
-*.log
+
+node_modules/
+session/
+auth_info_baileys/
 .env
