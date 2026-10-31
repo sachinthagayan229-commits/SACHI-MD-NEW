@@ -1,64 +1,54 @@
-name: SACHI-MD PAIR & RUN
+name: SACHI-MD FIXED PAIR
 
 on:
   workflow_dispatch:
     inputs:
-      action:
-        description: 'Select Action'
-        required: true
-        default: 'pair'
-        type: choice
-        options:
-          - pair
-          - run
       number:
-        description: 'Number 947XXXXXXXX (no +)'
-        required: false
+        description: '947XXXXXXXX no +'
+        required: true
         type: string
 
 jobs:
-  bot:
+  pair:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - run: npm install
-
-      - name: Get Pair Code
-        if: ${{ inputs.action == 'pair' }}
+      - name: Install LATEST Baileys
         run: |
-          rm -rf session
+          rm -rf session node_modules package-lock.json
+          npm install @whiskeysockets/baileys@latest pino --save
+          npm install
+      - name: Pair
+        run: |
           cat > pair.cjs << 'EOF'
           const { default: makeWASocket, useMultiFileAuthState, delay } = require("@whiskeysockets/baileys");
           const pino = require("pino");
-          async function start() {
-            const number = process.argv[2];
-            const clean = number.replace(/[^0-9]/g,"");
-            console.log("Requesting code for:", clean);
+          (async()=>{
+            const num = process.argv[2].replace(/[^0-9]/g,"");
+            console.log("Target:", num);
             const { state, saveCreds } = await useMultiFileAuthState("./session");
             const sock = makeWASocket({
-              logger: pino({ level: "silent" }),
+              logger: pino({level:"silent"}),
               auth: state,
-              browser: ["SACHI-MD", "Chrome", "1.0"]
+              browser: ["Ubuntu","Chrome","20.0.04"],
+              syncFullHistory: false
             });
             sock.ev.on("creds.update", saveCreds);
-            await delay(3000);
-            const code = await sock.requestPairingCode(clean);
-            console.log("\n==============================");
-            console.log("✅ CODE: " + code);
-            console.log("Enter FAST within 30 sec!");
-            console.log("==============================\n");
-            await delay(120000);
-          }
-          start();
+            await delay(5000);
+            if(!sock.authState.creds.registered){
+              try{
+                const code = await sock.requestPairingCode(num);
+                console.log("\n=================================");
+                console.log(`✅ YOUR CODE: ${code}`);
+                console.log("Enter it FAST! You have 20 sec!");
+                console.log("=================================\n");
+              }catch(e){ console.log("Error:", e.message); }
+            }
+            await delay(180000);
+          })();
           EOF
           node pair.cjs ${{ inputs.number }}
-
-      - name: Run Bot
-        if: ${{ inputs.action == 'run' }}
-        run: |
-          rm -rf session
-          npm start
