@@ -1,16 +1,15 @@
+
 {
   "name": "sachi-md-new",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "node index.js",
-    "pair": "node pair.js"
+    "start": "node index.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.8",
-    "express": "^4.18.2",
-    "pino": "^8.0.0",
-    "node-fetch": "^3.3.2"
+    "@whiskeysockets/baileys": "6.7.8",
+    "express": "4.18.2",
+    "pino": "8.0.0"
   }
 }
