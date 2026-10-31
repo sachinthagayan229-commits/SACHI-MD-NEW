@@ -27,36 +27,34 @@ jobs:
           node-version: '20'
       - run: npm install
 
-      - name: Fix Pair.js ES Module
-        if: ${{ inputs.action == 'pair' }}
-        run: |
-          cat > pair.js << 'EOF'
-          import makeWASocket, { useMultiFileAuthState, delay } from "@whiskeysockets/baileys";
-          import pino from "pino";
-          const number = process.argv[2];
-          if (!number) { console.log("❌ Number missing!"); process.exit(1); }
-          console.log(`Pairing for: ${number}`);
-          const { state, saveCreds } = await useMultiFileAuthState("./session");
-          const sock = makeWASocket.default({
-            logger: pino({ level: "silent" }),
-            auth: state,
-            printQRInTerminal: false,
-            browser: ["SACHI-MD", "Chrome", "1.0"]
-          });
-          if (!sock.authState.creds.registered) {
-            await delay(2000);
-            const code = await sock.requestPairingCode(number.replace(/[^0-9]/g, ""));
-            console.log("\n=================================");
-            console.log(`✅ PAIR CODE: ${code}`);
-            console.log("=================================\n");
-          }
-          sock.ev.on("creds.update", saveCreds);
-          await delay(120000);
-          EOF
-
       - name: Get Pair Code
         if: ${{ inputs.action == 'pair' }}
-        run: node pair.js ${{ inputs.number }}
+        run: |
+          cat > pair.cjs << 'EOF'
+          const { default: makeWASocket, useMultiFileAuthState, delay } = require("@whiskeysockets/baileys");
+          const pino = require("pino");
+          async function start() {
+            const number = process.argv[2];
+            console.log("Pairing for:", number);
+            const { state, saveCreds } = await useMultiFileAuthState("./session");
+            const sock = makeWASocket({
+              logger: pino({ level: "silent" }),
+              auth: state,
+              browser: ["SACHI-MD", "Chrome", "1.0"]
+            });
+            if (!sock.authState.creds.registered) {
+              await delay(2000);
+              const code = await sock.requestPairingCode(number.replace(/[^0-9]/g,""));
+              console.log("\n==============================");
+              console.log("✅ PAIR CODE: " + code);
+              console.log("==============================\n");
+            }
+            sock.ev.on("creds.update", saveCreds);
+            await delay(120000);
+          }
+          start();
+          EOF
+          node pair.cjs ${{ inputs.number }}
 
       - name: Run Bot
         if: ${{ inputs.action == 'run' }}
