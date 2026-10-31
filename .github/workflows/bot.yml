@@ -12,7 +12,7 @@ on:
           - pair
           - run
       number:
-        description: 'Number for pair (947XXXXXXXX) - only for pair'
+        description: 'Number 947XXXXXXXX'
         required: false
         type: string
 
@@ -21,26 +21,30 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 350
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
-
-      - name: Install
-        run: npm install
+      - run: npm install
 
       - name: Get Pair Code
         if: ${{ inputs.action == 'pair' }}
         run: |
-          echo "Getting Pair Code for ${{ inputs.number }}"
-          node pair.js ${{ inputs.number }}
+          echo "Number: ${{ inputs.number }}"
+          ls -la
+          if [ -f pair.js ]; then
+            node pair.js ${{ inputs.number }}
+          elif [ -f pairing.js ]; then
+            node pairing.js ${{ inputs.number }}
+          elif [ -f src/pair.js ]; then
+            node src/pair.js ${{ inputs.number }}
+          else
+            echo "Trying npm way..."
+            npm start &
+            sleep 10
+            cat *.log || true
+          fi
 
       - name: Run Bot
         if: ${{ inputs.action == 'run' }}
-        run: |
-          echo "Starting SACHI-MD Bot..."
-          echo "Bot will run 6 hours!"
-          npm start
+        run: npm start
