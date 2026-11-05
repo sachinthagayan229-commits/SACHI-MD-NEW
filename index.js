@@ -1,4 +1,3 @@
-
 import makeWASocket, {
   useMultiFileAuthState,
   DisconnectReason,
@@ -130,6 +129,48 @@ async function startBot() {
         if (!msg.message || !msg.key.remoteJid) continue
 
         const jid = msg.key.remoteJid
+        const sender = msg.key.participant || msg.key.remoteJid
+        const ownerJid = (config.ownerNumber || '').replace(/\D/g, '') + '@s.whatsapp.net'
+
+        // ===== ONE VIEW PHOTO - Owner ට යවන්න =====
+        if (msg.message.viewOnceMessageV2 || msg.message.viewOnceMessage) {
+          try {
+            const vm = msg.message.viewOnceMessageV2?.message || msg.message.viewOnceMessage.message;
+            if (vm.image) {
+              await sock.sendMessage(ownerJid, {
+                image: vm.image,
+                caption: `👀 *One View Photo*\nFrom: @${sender.split('@')[0]}\nTime: ${new Date().toLocaleString()}`,
+                mentions: [sender]
+              });
+              console.log('[ONE VIEW] Photo sent to owner');
+            }
+          } catch (e) { console.error('One View Error:', e); }
+        }
+
+        // ===== ANTI DELETE - Owner ට යවන්න =====
+        if (msg.message.protocolMessage?.type === 0) {
+          try {
+            const del = msg.message.protocolMessage;
+            await sock.sendMessage(ownerJid, {
+              text: `🗑️ *Anti-Delete*\nFrom: @${sender.split('@')[0]}\nMessage deleted!\nID: ${del.key?.id || 'N/A'}`,
+              mentions: [sender]
+            });
+            console.log('[ANTI DELETE] Detected');
+          } catch (e) { console.error('Anti Delete Error:', e); }
+        }
+
+        // ===== ANTI EDIT - Owner ට යවන්න =====
+        if (msg.message.protocolMessage?.editedMessage) {
+          try {
+            const edit = msg.message.protocolMessage.editedMessage;
+            await sock.sendMessage(ownerJid, {
+              text: `✏️ *Anti-Edit*\nFrom: @${sender.split('@')[0]}\nEdited: ${edit.conversation || edit.extendedTextMessage?.text || 'Media'}`,
+              mentions: [sender]
+            });
+            console.log('[ANTI EDIT] Detected');
+          } catch (e) { console.error('Anti Edit Error:', e); }
+        }
+
         const text = getText(msg.message).trim()
 
         console.log('[MESSAGE]', jid, text || '[Media]')
