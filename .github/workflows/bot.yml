@@ -1,54 +1,37 @@
-name: SACHI-MD FIXED PAIR
+name: SACHI-MD V2 Bot
 
 on:
+  push:
+    branches: [ main ]
   workflow_dispatch:
-    inputs:
-      number:
-        description: '947XXXXXXXX no +'
-        required: true
-        type: string
 
 jobs:
-  pair:
+  run-bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 1440
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Install LATEST Baileys
-        run: |
-          rm -rf session node_modules package-lock.json
-          npm install @whiskeysockets/baileys@latest pino --save
-          npm install
-      - name: Pair
-        run: |
-          cat > pair.cjs << 'EOF'
-          const { default: makeWASocket, useMultiFileAuthState, delay } = require("@whiskeysockets/baileys");
-          const pino = require("pino");
-          (async()=>{
-            const num = process.argv[2].replace(/[^0-9]/g,"");
-            console.log("Target:", num);
-            const { state, saveCreds } = await useMultiFileAuthState("./session");
-            const sock = makeWASocket({
-              logger: pino({level:"silent"}),
-              auth: state,
-              browser: ["Ubuntu","Chrome","20.0.04"],
-              syncFullHistory: false
-            });
-            sock.ev.on("creds.update", saveCreds);
-            await delay(5000);
-            if(!sock.authState.creds.registered){
-              try{
-                const code = await sock.requestPairingCode(num);
-                console.log("\n=================================");
-                console.log(`✅ YOUR CODE: ${code}`);
-                console.log("Enter it FAST! You have 20 sec!");
-                console.log("=================================\n");
-              }catch(e){ console.log("Error:", e.message); }
-            }
-            await delay(180000);
-          })();
-          EOF
-          node pair.cjs ${{ inputs.number }}
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Restore Session
+        uses: actions/cache@v4
+        with:
+          path: ./session
+          key: sachi-session-${{ github.run_number }}
+          restore-keys: |
+            sachi-session-
+
+      - name: Run Bot
+        env:
+          SESSION_ID: ${{ secrets.SESSION_ID }}
+          PORT: 10000
+        run: npm start
