@@ -31,7 +31,6 @@ async function startBot() {
   const sessionId = process.env.SESSION_ID;
   const sessionDir = './session';
   
-  // Session Directory එක හදන්න
   if (!fs.existsSync(sessionDir)) {
     fs.mkdirSync(sessionDir, { recursive: true });
   }
@@ -40,28 +39,29 @@ async function startBot() {
   if (sessionId) {
     try {
       console.log('🔄 SESSION_ID එකෙන් Session එක Load කරනවා...');
-      const cleanId = sessionId.replace(/SACHI-MD:/g, '').trim();
       
-      // Base64 Decode කරලා Creds එකක් හදන්න
-      try {
-        const decoded = Buffer.from(cleanId, 'base64').toString('utf-8');
-        const credsData = JSON.parse(decoded);
-        
-        fs.writeFileSync(
-          path.join(sessionDir, 'creds.json'),
-          JSON.stringify(credsData, BufferJSON.replacer, 2)
-        );
-        console.log('✅ SESSION_ID එකෙන් Session එක Load වුනා!');
-      } catch (e) {
-        console.log('⚠️ SESSION_ID එක Base64 නෙවෙයි, File එකක් විදියට Save කරනවා');
-        fs.writeFileSync(path.join(sessionDir, 'session_id.txt'), sessionId);
+      let cleanId = sessionId.trim();
+      // SACHI-MD~ තියෙනවා නම් අයින් කරන්න
+      if (cleanId.includes('~')) {
+        cleanId = cleanId.split('~')[1];
+      } else if (cleanId.includes(':')) {
+        cleanId = cleanId.split(':')[1];
       }
+      
+      // Base64 Decode කරන්න
+      const decoded = Buffer.from(cleanId, 'base64').toString('utf-8');
+      const credsData = JSON.parse(decoded);
+      
+      fs.writeFileSync(
+        path.join(sessionDir, 'creds.json'),
+        JSON.stringify(credsData, BufferJSON.replacer, 2)
+      );
+      console.log('✅ SESSION_ID එකෙන් Session එක Load වුනා!');
     } catch (error) {
       console.log('❌ Session Load වුනේ නෑ:', error.message);
     }
   }
   
-  // Auth State එක
   const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
   
   const { version } = await fetchLatestBaileysVersion();
@@ -95,7 +95,6 @@ async function startBot() {
     
     if (qr) {
       console.log('📱 QR Code එක Scan කරන්න!');
-      console.log(qr);
     }
     
     if (connection === 'close') {
@@ -109,83 +108,28 @@ async function startBot() {
     }
   });
   
-  // Messages ලැබුණු විට
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    console.log(`[UPsert Type] ${type} Count: ${messages.length}`);
-    
     for (const msg of messages) {
-      console.log('[RAW MSG]', JSON.stringify({
-        remoteJid: msg.key.remoteJid,
-        fromMe: msg.key.fromMe,
-        id: msg.key.id,
-        participant: msg.key.participant
-      }));
-      
-      if (!msg.message) {
-        console.log('[SKIP] No message content');
-        continue;
-      }
-      
-      if (!msg.key.remoteJid) {
-        console.log('[SKIP] No remoteJid');
-        continue;
-      }
-      
-      if (msg.key.remoteJid === 'status@broadcast') {
-        console.log('[SKIP] Status broadcast');
-        continue;
-      }
+      if (!msg.message) continue;
+      if (!msg.key.remoteJid) continue;
+      if (msg.key.remoteJid === 'status@broadcast') continue;
       
       const isGroup = msg.key.remoteJid.endsWith('@g.us');
-      
-      if (isGroup && !config.allowGroup) {
-        console.log('[SKIP] Group messages not allowed');
-        continue;
-      }
-      
-      if (msg.key.fromMe && !config.allowSelf) {
-        console.log('[SKIP] Self messages not allowed');
-        continue;
-      }
-      
-      console.log('[MESSAGE]', msg.key.remoteJid);
+      if (isGroup && !config.allowGroup) continue;
+      if (msg.key.fromMe && !config.allowSelf) continue;
       
       let text = '';
+      if (msg.message.conversation) text = msg.message.conversation;
+      else if (msg.message.extendedTextMessage?.text) text = msg.message.extendedTextMessage.text;
+      else if (msg.message.imageMessage?.caption) text = msg.message.imageMessage.caption;
+      else if (msg.message.videoMessage?.caption) text = msg.message.videoMessage.caption;
       
-      if (msg.message.conversation) {
-        text = msg.message.conversation;
-      } else if (msg.message.extendedTextMessage?.text) {
-        text = msg.message.extendedTextMessage.text;
-      } else if (msg.message.imageMessage?.caption) {
-        text = msg.message.imageMessage.caption;
-      } else if (msg.message.videoMessage?.caption) {
-        text = msg.message.videoMessage.caption;
-      } else if (msg.message.documentMessage?.caption) {
-        text = msg.message.documentMessage.caption;
-      } else if (msg.message.buttonsResponseMessage?.selectedButtonId) {
-        text = msg.message.buttonsResponseMessage.selectedButtonId;
-      } else if (msg.message.listResponseMessage?.singleSelectReply?.selectedRowId) {
-        text = msg.message.listResponseMessage.singleSelectReply.selectedRowId;
-      }
-      
-      if (!text) {
-        console.log('[SKIP] No text content');
-        continue;
-      }
-      
+      if (!text) continue;
       text = text.trim();
-      console.log('[TEXT]', text);
-      
-      if (!text.startsWith(config.prefix)) {
-        console.log('[SKIP] No prefix');
-        continue;
-      }
+      if (!text.startsWith(config.prefix)) continue;
       
       const args = text.slice(config.prefix.length).trim().split(/\s+/);
       const command = args[0].toLowerCase();
-      
-      console.log('[COMMAND]', command);
-      
       await handleCommand(sock, msg, command, args.slice(1));
     }
   });
