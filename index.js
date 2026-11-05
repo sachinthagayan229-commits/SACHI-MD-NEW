@@ -153,6 +153,7 @@ async function startBot() {
       
       const args = text.slice(config.prefix.length).trim().split(/\s+/);
       const command = args[0].toLowerCase();
+      console.log(`🎯 Command: ${command}, From: ${msg.key.remoteJid}`);
       await handleCommand(sock, msg, command, args.slice(1));
     }
   });
