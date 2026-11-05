@@ -4,11 +4,13 @@ on:
   push:
     branches: [ main ]
   workflow_dispatch:
+  schedule:
+    - cron: '*/30 * * * *'
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 1440
+    timeout-minutes: 350
 
     steps:
       - name: Checkout Code
@@ -26,12 +28,12 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ./session
-          key: sachi-session-${{ github.run_number }}
+          key: sachi-session-${{ hashFiles('**/package-lock.json') }}-${{ secrets.SESSION_ID }}
           restore-keys: |
             sachi-session-
 
       - name: Run Bot
         env:
           SESSION_ID: ${{ secrets.SESSION_ID }}
-          PORT: 10000
+          OWNER_NUMBER: ${{ secrets.OWNER_NUMBER }}
         run: npm start
