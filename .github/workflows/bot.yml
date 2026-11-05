@@ -28,7 +28,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ./session
-          key: sachi-session-${{ hashFiles('**/package-lock.json') }}-${{ secrets.SESSION_ID }}
+          key: sachi-session-${{ github.sha }}
           restore-keys: |
             sachi-session-
 
