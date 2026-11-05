@@ -145,13 +145,17 @@ async function startBot() {
   })
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    if (type !== 'notify') return
+    console.log('[UPsert Type]', type, 'Count:', messages.length);
     for (const msg of messages) {
       try {
-        if (!msg.message || !msg.key.remoteJid) continue
-        const jid = msg.key.remoteJid
-        const sender = msg.key.participant || msg.key.remoteJid
-        const ownerJid = (config.ownerNumber || '').replace(/\D/g, '') + '@s.whatsapp.net'
+        console.log('[RAW MSG]', JSON.stringify(msg.key));
+        if (!msg.message || !msg.key.remoteJid) {
+          console.log('[SKIP] No message or remoteJid');
+          continue;
+        }
+        const jid = msg.key.remoteJid;
+        const sender = msg.key.participant || msg.key.remoteJid;
+        const ownerJid = (config.ownerNumber || '').replace(/\D/g, '') + '@s.whatsapp.net';
 
         if (msg.message.viewOnceMessageV2 || msg.message.viewOnceMessage) {
           try {
@@ -189,48 +193,54 @@ async function startBot() {
           } catch (e) { console.error('Anti Edit Error:', e); }
         }
 
-        const text = getText(msg.message).trim()
-        console.log('[MESSAGE]', jid, text || '[Media]')
-        if (!text.startsWith(config.prefix)) continue
-        const parts = text.slice(config.prefix.length).trim().split(/\s+/)
-        const cmd = (parts.shift() || '').toLowerCase()
-        const args = parts
+        const text = getText(msg.message).trim();
+        console.log('[MESSAGE]', jid, 'FROM:', sender, 'TEXT:', text || '[Media]');
+
+        if (!text.startsWith(config.prefix)) {
+          console.log('[SKIP] Not command, prefix:', config.prefix, 'text:', text);
+          continue;
+        }
+        
+        const parts = text.slice(config.prefix.length).trim().split(/\s+/);
+        const cmd = (parts.shift() || '').toLowerCase();
+        const args = parts;
+        console.log('[COMMAND]', cmd);
 
         if (cmd === 'ping') {
-          await sock.sendMessage(jid, { text: 'Pong! SACHI-MD Online 🟢' }, { quoted: msg })
+          await sock.sendMessage(jid, { text: 'Pong! SACHI-MD Online 🟢' }, { quoted: msg });
         } else if (cmd === 'menu') {
-          await sock.sendMessage(jid, { text: `🔥 *${config.botName} MENU*\n\n• .ping\n• .menu\n• .tagall\n• .kick @mention` }, { quoted: msg })
+          await sock.sendMessage(jid, { text: `🔥 *${config.botName} MENU*\n\n• .ping\n• .menu\n• .tagall\n• .kick @mention` }, { quoted: msg });
         } else if (cmd === 'tagall') {
           if (!jid.endsWith('@g.us')) {
-            await sock.sendMessage(jid, { text: 'මේ command එක group එකක භාවිතා කරන්න.' })
-            continue
+            await sock.sendMessage(jid, { text: 'මේ command එක group එකක භාවිතා කරන්න.' });
+            continue;
           }
-          const metadata = await sock.groupMetadata(jid)
-          const participants = metadata.participants
-          const mentions = participants.map(p => p.id)
-          const message = participants.map(p => '@' + p.id.split('@')[0]).join(' ')
-          await sock.sendMessage(jid, { text: '*SACHI TAG ALL*\n\n' + message, mentions })
+          const metadata = await sock.groupMetadata(jid);
+          const participants = metadata.participants;
+          const mentions = participants.map(p => p.id);
+          const message = participants.map(p => '@' + p.id.split('@')[0]).join(' ');
+          await sock.sendMessage(jid, { text: '*SACHI TAG ALL*\n\n' + message, mentions });
         } else if (cmd === 'kick') {
-          if (!jid.endsWith('@g.us')) continue
-          const mentioned = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || []
+          if (!jid.endsWith('@g.us')) continue;
+          const mentioned = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
           if (!mentioned.length) {
-            await sock.sendMessage(jid, { text: 'User කෙනෙක් mention කරන්න.' })
-            continue
+            await sock.sendMessage(jid, { text: 'User කෙනෙක් mention කරන්න.' });
+            continue;
           }
-          const metadata = await sock.groupMetadata(jid)
-          const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net'
-          const botAdmin = metadata.participants.some(p => p.id === botId && (p.admin === 'admin' || p.admin === 'superadmin'))
+          const metadata = await sock.groupMetadata(jid);
+          const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+          const botAdmin = metadata.participants.some(p => p.id === botId && (p.admin === 'admin' || p.admin === 'superadmin'));
           if (!botAdmin) {
-            await sock.sendMessage(jid, { text: 'Bot එක group admin විය යුතුයි.' })
-            continue
+            await sock.sendMessage(jid, { text: 'Bot එක group admin විය යුතුයි.' });
+            continue;
           }
-          await sock.groupParticipantsUpdate(jid, [mentioned[0]], 'remove')
+          await sock.groupParticipantsUpdate(jid, [mentioned[0]], 'remove');
         }
       } catch (error) {
-        console.error('Command error:', error.message)
+        console.error('Command error:', error.message);
       }
     }
-  })
+  });
 }
 
 startBot().catch(error => {
