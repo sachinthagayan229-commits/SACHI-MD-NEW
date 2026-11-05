@@ -47,13 +47,19 @@ if (sessionId) {
     }
     
     const decoded = Buffer.from(cleanId, 'base64').toString('utf-8');
-    const credsData = JSON.parse(decoded);
+    const credsData = JSON.parse(decoded, BufferJSON.reviver);
+    
+    if (!credsData.me || !credsData.me.id) {
+      console.log('⚠️ Creds එකේ me.id එකක් නෑ! SESSION_ID එක Invalid!');
+      throw new Error('Invalid creds format');
+    }
     
     fs.writeFileSync(
       path.join(sessionDir, 'creds.json'),
       JSON.stringify(credsData, BufferJSON.replacer, 2)
     );
     console.log('✅ SESSION_ID එකෙන් Session එක Load වුනා!');
+    console.log(`📱 Account: ${credsData.me.id}`);
   } catch (error) {
     console.log('❌ Session Load වුනේ නෑ:', error.message);
   }
@@ -97,7 +103,9 @@ async function startBot() {
     
     if (connection === 'close') {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
+      const error = lastDisconnect?.error;
       console.log(`Connection closed. Status: ${statusCode}`);
+      console.log(`Error:`, error?.message || error);
       
       if (statusCode === DisconnectReason.loggedOut) {
         console.log('❌ Session එක Expired! අලුත් SESSION_ID එකක් ඕනේ!');
@@ -105,6 +113,14 @@ async function startBot() {
         setTimeout(startBot, 10000);
       } else if (statusCode === DisconnectReason.badSession) {
         console.log('❌ Bad Session! Session එක Delete කරන්න ඕනේ!');
+        try {
+          fs.rmSync(sessionDir, { recursive: true, force: true });
+          fs.mkdirSync(sessionDir, { recursive: true });
+        } catch(e) {}
+        setTimeout(startBot, 5000);
+      } else if (!statusCode) {
+        console.log('❌ Unknown Error! Session එක Invalid වෙන්න පුළුවන්!');
+        console.log('🔄 5 Seconds වලින් Reconnect කරනවා...');
         setTimeout(startBot, 5000);
       } else {
         console.log('🔄 Reconnecting in 5 seconds...');
