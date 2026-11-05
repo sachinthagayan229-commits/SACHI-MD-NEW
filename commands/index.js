@@ -2,17 +2,12 @@ import config from '../config.js';
 
 export async function handleCommand(sock, msg, command, args) {
   const sender = msg.key.remoteJid;
-  const isGroup = sender.endsWith('@g.us');
   const senderNumber = sender.split('@')[0].split(':')[0];
-  
-  // Owner check
-  const isOwner = senderNumber === config.ownerNumber;
   
   switch (command) {
     case 'ping':
       await sock.sendMessage(sender, { text: '🏓 Pong! Bot එක Online!' });
       break;
-      
     case 'menu':
       const menu = `
 ╭─「 SACHI-MD 」─
@@ -26,17 +21,14 @@ export async function handleCommand(sock, msg, command, args) {
       `;
       await sock.sendMessage(sender, { text: menu });
       break;
-      
     case 'owner':
       await sock.sendMessage(sender, { text: `👤 Owner: ${config.ownerNumber}` });
       break;
-      
     case 'help':
       await sock.sendMessage(sender, { text: '📖 !menu එකෙන් Commands බලන්න' });
       break;
-      
     default:
-      await sock.sendMessage(sender, { text: `❌ Command එකක් නෙවෙයි: ${command}\n!menu එක බලන්න` });
+      await sock.sendMessage(sender, { text: `❌ Command එකක් නෙවෙයි: ${command}` });
       break;
   }
 }
