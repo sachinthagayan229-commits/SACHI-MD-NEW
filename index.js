@@ -22,11 +22,10 @@ if (process.env.SESSION_ID) {
 
     let raw = process.env.SESSION_ID.trim().replace(/\s+/g, '');
     
-    if (raw.startsWith('SACHI-MD~')) {
-      raw = raw.replace('SACHI-MD~', '');
-    }
-    if (raw.startsWith('SACHI-MD:')) {
-      raw = raw.replace('SACHI-MD:', '');
+    // SACHI- / SACHI-MD~ වගේ Prefix එක අයින් කරන්න
+    const eyJIndex = raw.indexOf('eyJ');
+    if (eyJIndex > 0) {
+      raw = raw.substring(eyJIndex);
     }
 
     let decoded = raw;
