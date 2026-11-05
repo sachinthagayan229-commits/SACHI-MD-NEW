@@ -20,20 +20,32 @@ if (process.env.SESSION_ID) {
       fs.mkdirSync(sessionDir, { recursive: true });
     }
 
-    let raw = process.env.SESSION_ID.trim();
-    // SACHI-MD~ Prefix එක අයින් කරන්න
+    let raw = process.env.SESSION_ID.trim().replace(/\s+/g, '');
+    
     if (raw.startsWith('SACHI-MD~')) {
       raw = raw.replace('SACHI-MD~', '');
     }
+    if (raw.startsWith('SACHI-MD:')) {
+      raw = raw.replace('SACHI-MD:', '');
+    }
 
-    // Base64 Decode කරන්න
-    let decoded = Buffer.from(raw, 'base64').toString('utf8');
-    // JSON එකක්ද බලන්න
+    let decoded = raw;
+    try {
+      decoded = Buffer.from(raw, 'base64').toString('utf8');
+    } catch(e) {}
+
+    if (!decoded.trim().startsWith('{')) {
+      try {
+        decoded = Buffer.from(decoded, 'base64').toString('utf8');
+      } catch(e) {}
+    }
+
     JSON.parse(decoded);
     fs.writeFileSync(path.join(sessionDir, 'creds.json'), decoded);
     console.log('✅ SESSION_ID එකෙන් Session එක Load වුනා!');
   } catch (err) {
-    console.error('❌ Session Load Error:', err);
+    console.error('❌ Session Load Error:', err.message);
+    console.error('Raw starts with:', (process.env.SESSION_ID || '').substring(0, 20));
   }
 }
 
@@ -85,27 +97,18 @@ app.listen(config.dashboardPort, () => {
 
 function getText(message) {
   let msg = message
-
   for (let i = 0; i < 5 && msg; i++) {
     if (msg.conversation) return msg.conversation
     if (msg.extendedTextMessage?.text) return msg.extendedTextMessage.text
     if (msg.imageMessage?.caption) return msg.imageMessage.caption
     if (msg.videoMessage?.caption) return msg.videoMessage.caption
-
-    msg =
-      msg.ephemeralMessage?.message ||
-      msg.viewOnceMessage?.message ||
-      msg.viewOnceMessageV2?.message ||
-      msg.documentWithCaptionMessage?.message
+    msg = msg.ephemeralMessage?.message || msg.viewOnceMessage?.message || msg.viewOnceMessageV2?.message || msg.documentWithCaptionMessage?.message
   }
-
   return ''
 }
 
 async function startBot() {
-  const { state, saveCreds } =
-    await useMultiFileAuthState('./session')
-
+  const { state, saveCreds } = await useMultiFileAuthState('./session')
   const { version } = await fetchLatestBaileysVersion()
 
   const sock = makeWASocket({
@@ -119,27 +122,19 @@ async function startBot() {
 
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect } = update
-
-    if (connection === 'connecting') {
-      global.botStatus = 'Connecting...'
-    }
-
+    if (connection === 'connecting') global.botStatus = 'Connecting...'
     if (connection === 'open') {
       global.botStatus = 'Online 🟢'
       reconnecting = false
       console.log('SACHI-MD Connected!')
     }
-
     if (connection === 'close') {
       global.botStatus = 'Disconnected 🔴'
-
       const code = lastDisconnect?.error?.output?.statusCode
-
       if (code === DisconnectReason.loggedOut) {
         console.log('Session logged out. New pairing required.')
         return
       }
-
       if (!reconnecting) {
         reconnecting = true
         setTimeout(() => {
@@ -152,16 +147,13 @@ async function startBot() {
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     if (type !== 'notify') return
-
     for (const msg of messages) {
       try {
         if (!msg.message || !msg.key.remoteJid) continue
-
         const jid = msg.key.remoteJid
         const sender = msg.key.participant || msg.key.remoteJid
         const ownerJid = (config.ownerNumber || '').replace(/\D/g, '') + '@s.whatsapp.net'
 
-        // ===== ONE VIEW PHOTO - Owner ට යවන්න =====
         if (msg.message.viewOnceMessageV2 || msg.message.viewOnceMessage) {
           try {
             const vm = msg.message.viewOnceMessageV2?.message || msg.message.viewOnceMessage.message;
@@ -176,7 +168,6 @@ async function startBot() {
           } catch (e) { console.error('One View Error:', e); }
         }
 
-        // ===== ANTI DELETE - Owner ට යවන්න =====
         if (msg.message.protocolMessage?.type === 0) {
           try {
             const del = msg.message.protocolMessage;
@@ -188,7 +179,6 @@ async function startBot() {
           } catch (e) { console.error('Anti Delete Error:', e); }
         }
 
-        // ===== ANTI EDIT - Owner ට යවන්න =====
         if (msg.message.protocolMessage?.editedMessage) {
           try {
             const edit = msg.message.protocolMessage.editedMessage;
@@ -201,87 +191,41 @@ async function startBot() {
         }
 
         const text = getText(msg.message).trim()
-
         console.log('[MESSAGE]', jid, text || '[Media]')
-
         if (!text.startsWith(config.prefix)) continue
-
         const parts = text.slice(config.prefix.length).trim().split(/\s+/)
         const cmd = (parts.shift() || '').toLowerCase()
         const args = parts
 
         if (cmd === 'ping') {
-          await sock.sendMessage(
-            jid,
-            { text: 'Pong! SACHI-MD Online 🟢' },
-            { quoted: msg }
-          )
-        }
-
-        else if (cmd === 'menu') {
-          await sock.sendMessage(jid, {
-            text:
-              `🔥 *${config.botName} MENU*\n\n` +
-              '• .ping\n' +
-              '• .menu\n' +
-              '• .tagall\n' +
-              '• .kick @mention'
-          }, { quoted: msg })
-        }
-
-        else if (cmd === 'tagall') {
+          await sock.sendMessage(jid, { text: 'Pong! SACHI-MD Online 🟢' }, { quoted: msg })
+        } else if (cmd === 'menu') {
+          await sock.sendMessage(jid, { text: `🔥 *${config.botName} MENU*\n\n• .ping\n• .menu\n• .tagall\n• .kick @mention` }, { quoted: msg })
+        } else if (cmd === 'tagall') {
           if (!jid.endsWith('@g.us')) {
-            await sock.sendMessage(jid, {
-              text: 'මේ command එක group එකක භාවිතා කරන්න.'
-            })
+            await sock.sendMessage(jid, { text: 'මේ command එක group එකක භාවිතා කරන්න.' })
             continue
           }
-
           const metadata = await sock.groupMetadata(jid)
           const participants = metadata.participants
-
           const mentions = participants.map(p => p.id)
-          const message = participants
-            .map(p => '@' + p.id.split('@')[0])
-            .join(' ')
-
-          await sock.sendMessage(jid, {
-            text: '*SACHI TAG ALL*\n\n' + message,
-            mentions
-          })
-        }
-
-        else if (cmd === 'kick') {
+          const message = participants.map(p => '@' + p.id.split('@')[0]).join(' ')
+          await sock.sendMessage(jid, { text: '*SACHI TAG ALL*\n\n' + message, mentions })
+        } else if (cmd === 'kick') {
           if (!jid.endsWith('@g.us')) continue
-
-          const mentioned =
-            msg.message.extendedTextMessage?.contextInfo?.mentionedJid || []
-
+          const mentioned = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || []
           if (!mentioned.length) {
-            await sock.sendMessage(jid, {
-              text: 'User කෙනෙක් mention කරන්න.'
-            })
+            await sock.sendMessage(jid, { text: 'User කෙනෙක් mention කරන්න.' })
             continue
           }
-
           const metadata = await sock.groupMetadata(jid)
           const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net'
-          const botAdmin = metadata.participants.some(
-            p => p.id === botId && (p.admin === 'admin' || p.admin === 'superadmin')
-          )
-
+          const botAdmin = metadata.participants.some(p => p.id === botId && (p.admin === 'admin' || p.admin === 'superadmin'))
           if (!botAdmin) {
-            await sock.sendMessage(jid, {
-              text: 'Bot එක group admin විය යුතුයි.'
-            })
+            await sock.sendMessage(jid, { text: 'Bot එක group admin විය යුතුයි.' })
             continue
           }
-
-          await sock.groupParticipantsUpdate(
-            jid,
-            [mentioned[0]],
-            'remove'
-          )
+          await sock.groupParticipantsUpdate(jid, [mentioned[0]], 'remove')
         }
       } catch (error) {
         console.error('Command error:', error.message)
