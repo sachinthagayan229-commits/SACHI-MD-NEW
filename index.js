@@ -1,249 +1,213 @@
-import pkg from '@whiskeysockets/baileys';
-const {
-  default: makeWASocket,
-  useMultiFileAuthState,
-  DisconnectReason,
-  fetchLatestBaileysVersion
-} = pkg;
+import { 
+  makeWASocket, 
+  useMultiFileAuthState, 
+  DisconnectReason, 
+  fetchLatestBaileysVersion,
+  makeCacheableSignalKeyStore,
+  Browsers,
+  BufferJSON
+} from '@whiskeysockets/baileys';
+import pino from 'pino';
+import fs from 'fs';
+import path from 'path';
+import config from './config.js';
+import { handleCommand } from './commands/index.js';
 
-import pino from 'pino'
-import express from 'express'
-import fs from 'fs'
-import path from 'path'
-import config from './config.js'
-
-// ===== SESSION_ID එකෙන් Session එක Load කරන්න =====
-if (process.env.SESSION_ID) {
-  try {
-    const sessionDir = './session';
-    if (!fs.existsSync(sessionDir)) {
-      fs.mkdirSync(sessionDir, { recursive: true });
-    }
-
-    let raw = process.env.SESSION_ID.trim().replace(/\s+/g, '');
-    
-    // SACHI- / SACHI-MD~ වගේ Prefix එක අයින් කරන්න
-    const eyJIndex = raw.indexOf('eyJ');
-    if (eyJIndex > 0) {
-      raw = raw.substring(eyJIndex);
-    }
-
-    let decoded = raw;
-    try {
-      decoded = Buffer.from(raw, 'base64').toString('utf8');
-    } catch(e) {}
-
-    if (!decoded.trim().startsWith('{')) {
-      try {
-        decoded = Buffer.from(decoded, 'base64').toString('utf8');
-      } catch(e) {}
-    }
-
-    JSON.parse(decoded);
-    fs.writeFileSync(path.join(sessionDir, 'creds.json'), decoded);
-    console.log('✅ SESSION_ID එකෙන් Session එක Load වුනා!');
-  } catch (err) {
-    console.error('❌ Session Load Error:', err.message);
-    console.error('Raw starts with:', (process.env.SESSION_ID || '').substring(0, 20));
-  }
-}
-
-const app = express()
-app.use(express.json())
-
-global.botStatus = 'Starting...'
-let reconnecting = false
-
+// Dashboard Server
+import express from 'express';
+const app = express();
 app.get('/', (req, res) => {
-  res.send(`
-    <html>
-    <head>
-      <meta name="viewport" content="width=device-width">
-      <title>SACHI-MD V2</title>
-      <style>
-        body{background:#0b1020;color:white;font-family:Arial;padding:20px}
-        .card{background:#182238;padding:20px;border-radius:14px;margin:15px 0}
-        h1{color:#63e6be}
-      </style>
-    </head>
-    <body>
-      <h1>🔥 SACHI-MD V2</h1>
-      <div class="card">
-        <h3>Bot Status</h3>
-        <h2 id="status">Loading...</h2>
-      </div>
-      <script>
-        async function load(){
-          const r=await fetch('/api/stats')
-          const d=await r.json()
-          document.getElementById('status').innerText=d.status
-        }
-        load()
-        setInterval(load,5000)
-      </script>
-    </body>
-    </html>
-  `)
-})
-
-app.get('/api/stats', (req, res) => {
-  res.json({ status: global.botStatus })
-})
-
-app.listen(config.dashboardPort, () => {
-  console.log('Dashboard started on port', config.dashboardPort)
-})
-
-function getText(message) {
-  let msg = message
-  for (let i = 0; i < 5 && msg; i++) {
-    if (msg.conversation) return msg.conversation
-    if (msg.extendedTextMessage?.text) return msg.extendedTextMessage.text
-    if (msg.imageMessage?.caption) return msg.imageMessage.caption
-    if (msg.videoMessage?.caption) return msg.videoMessage.caption
-    msg = msg.ephemeralMessage?.message || msg.viewOnceMessage?.message || msg.viewOnceMessageV2?.message || msg.documentWithCaptionMessage?.message
-  }
-  return ''
-}
+  res.json({ 
+    status: 'online', 
+    bot: config.botName, 
+    time: new Date().toISOString() 
+  });
+});
+app.listen(10000, () => {
+  console.log('Dashboard started on port 10000');
+});
 
 async function startBot() {
-  const { state, saveCreds } = await useMultiFileAuthState('./session')
-  const { version } = await fetchLatestBaileysVersion()
-
+  // SESSION_ID එකෙන් Session එක Load කරන්න
+  const sessionId = process.env.SESSION_ID;
+  let authState;
+  
+  if (sessionId) {
+    try {
+      console.log('🔄 SESSION_ID එකෙන් Session එක Load කරනවා...');
+      // Session ID එක Decode කරලා Auth State එකක් හදන්න
+      // මේක Simple Method එකක් - ඔයාගේ Pair Site එකෙන් ලැබෙන Session ID එක
+      // Baileys Session එකක් විදියට Use කරන්න පුළුවන්
+      const sessionDir = './session';
+      if (!fs.existsSync(sessionDir)) {
+        fs.mkdirSync(sessionDir, { recursive: true });
+      }
+      // SESSION_ID එක File එකක් විදියට Save කරන්න
+      fs.writeFileSync(path.join(sessionDir, 'session_id.txt'), sessionId);
+      console.log('✅ SESSION_ID එකෙන් Session එක Load වුනා!');
+    } catch (error) {
+      console.log('❌ Session Load වුනේ නෑ:', error.message);
+    }
+  }
+  
+  // Normal Auth State එක
+  const { state, saveCreds } = await useMultiFileAuthState('./session');
+  authState = { state, saveCreds };
+  
+  const { version } = await fetchLatestBaileysVersion();
+  console.log(`Using Baileys v${version.join('.')}`);
+  
   const sock = makeWASocket({
     version,
-    auth: state,
+    auth: {
+      creds: authState.state.creds,
+      keys: makeCacheableSignalKeyStore(authState.state.keys, pino({ level: 'silent' }))
+    },
     logger: pino({ level: 'silent' }),
-    browser: ['SACHI-MD', 'Chrome', '1.0']
-  })
-
-  sock.ev.on('creds.update', saveCreds)
-
-  sock.ev.on('connection.update', async (update) => {
-    const { connection, lastDisconnect } = update
-    if (connection === 'connecting') global.botStatus = 'Connecting...'
-    if (connection === 'open') {
-      global.botStatus = 'Online 🟢'
-      reconnecting = false
-      console.log('SACHI-MD Connected!')
+    browser: Browsers.windows('Chrome'),
+    printQRInTerminal: false,
+    connectTimeoutMs: 60000,
+    defaultQueryTimeoutMs: 0,
+    keepAliveIntervalMs: 10000,
+    emitOwnEvents: true,
+    syncFullHistory: false,
+    markOnlineOnConnect: true,
+    getMessage: async (key) => {
+      if (authState) {
+        const msg = await authState.state.keys.getMessage(key);
+        return msg || {};
+      }
+      return {};
     }
+  });
+  
+  sock.ev.on('creds.update', authState.saveCreds);
+  
+  sock.ev.on('connection.update', (update) => {
+    const { connection, lastDisconnect, qr } = update;
+    
+    if (qr) {
+      console.log('📱 QR Code එක Scan කරන්න!');
+      console.log(qr);
+    }
+    
     if (connection === 'close') {
-      global.botStatus = 'Disconnected 🔴'
-      const code = lastDisconnect?.error?.output?.statusCode
-      if (code === DisconnectReason.loggedOut) {
-        console.log('Session logged out. New pairing required.')
-        return
+      const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+      console.log(`Connection closed. Reconnecting: ${shouldReconnect}`);
+      if (shouldReconnect) {
+        setTimeout(startBot, 5000);
       }
-      if (!reconnecting) {
-        reconnecting = true
-        setTimeout(() => {
-          reconnecting = false
-          startBot().catch(console.error)
-        }, 5000)
-      }
+    } else if (connection === 'open') {
+      console.log('✅ SACHI-MD Connected!');
     }
-  })
-
+  });
+  
+  // Messages ලැබුණු විට
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    console.log('[UPsert Type]', type, 'Count:', messages.length);
+    console.log(`[UPsert Type] ${type} Count: ${messages.length}`);
+    
     for (const msg of messages) {
-      try {
-        console.log('[RAW MSG]', JSON.stringify(msg.key));
-        if (!msg.message || !msg.key.remoteJid) {
-          console.log('[SKIP] No message or remoteJid');
-          continue;
-        }
-        const jid = msg.key.remoteJid;
-        const sender = msg.key.participant || msg.key.remoteJid;
-        const ownerJid = (config.ownerNumber || '').replace(/\D/g, '') + '@s.whatsapp.net';
-
-        if (msg.message.viewOnceMessageV2 || msg.message.viewOnceMessage) {
-          try {
-            const vm = msg.message.viewOnceMessageV2?.message || msg.message.viewOnceMessage.message;
-            if (vm.image) {
-              await sock.sendMessage(ownerJid, {
-                image: vm.image,
-                caption: `👀 *One View Photo*\nFrom: @${sender.split('@')[0]}\nTime: ${new Date().toLocaleString()}`,
-                mentions: [sender]
-              });
-              console.log('[ONE VIEW] Photo sent to owner');
-            }
-          } catch (e) { console.error('One View Error:', e); }
-        }
-
-        if (msg.message.protocolMessage?.type === 0) {
-          try {
-            const del = msg.message.protocolMessage;
-            await sock.sendMessage(ownerJid, {
-              text: `🗑️ *Anti-Delete*\nFrom: @${sender.split('@')[0]}\nMessage deleted!\nID: ${del.key?.id || 'N/A'}`,
-              mentions: [sender]
-            });
-            console.log('[ANTI DELETE] Detected');
-          } catch (e) { console.error('Anti Delete Error:', e); }
-        }
-
-        if (msg.message.protocolMessage?.editedMessage) {
-          try {
-            const edit = msg.message.protocolMessage.editedMessage;
-            await sock.sendMessage(ownerJid, {
-              text: `✏️ *Anti-Edit*\nFrom: @${sender.split('@')[0]}\nEdited: ${edit.conversation || edit.extendedTextMessage?.text || 'Media'}`,
-              mentions: [sender]
-            });
-            console.log('[ANTI EDIT] Detected');
-          } catch (e) { console.error('Anti Edit Error:', e); }
-        }
-
-        const text = getText(msg.message).trim();
-        console.log('[MESSAGE]', jid, 'FROM:', sender, 'TEXT:', text || '[Media]');
-
-        if (!text.startsWith(config.prefix)) {
-          console.log('[SKIP] Not command, prefix:', config.prefix, 'text:', text);
-          continue;
-        }
-        
-        const parts = text.slice(config.prefix.length).trim().split(/\s+/);
-        const cmd = (parts.shift() || '').toLowerCase();
-        const args = parts;
-        console.log('[COMMAND]', cmd);
-
-        if (cmd === 'ping') {
-          await sock.sendMessage(jid, { text: 'Pong! SACHI-MD Online 🟢' }, { quoted: msg });
-        } else if (cmd === 'menu') {
-          await sock.sendMessage(jid, { text: `🔥 *${config.botName} MENU*\n\n• .ping\n• .menu\n• .tagall\n• .kick @mention` }, { quoted: msg });
-        } else if (cmd === 'tagall') {
-          if (!jid.endsWith('@g.us')) {
-            await sock.sendMessage(jid, { text: 'මේ command එක group එකක භාවිතා කරන්න.' });
-            continue;
-          }
-          const metadata = await sock.groupMetadata(jid);
-          const participants = metadata.participants;
-          const mentions = participants.map(p => p.id);
-          const message = participants.map(p => '@' + p.id.split('@')[0]).join(' ');
-          await sock.sendMessage(jid, { text: '*SACHI TAG ALL*\n\n' + message, mentions });
-        } else if (cmd === 'kick') {
-          if (!jid.endsWith('@g.us')) continue;
-          const mentioned = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || [];
-          if (!mentioned.length) {
-            await sock.sendMessage(jid, { text: 'User කෙනෙක් mention කරන්න.' });
-            continue;
-          }
-          const metadata = await sock.groupMetadata(jid);
-          const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
-          const botAdmin = metadata.participants.some(p => p.id === botId && (p.admin === 'admin' || p.admin === 'superadmin'));
-          if (!botAdmin) {
-            await sock.sendMessage(jid, { text: 'Bot එක group admin විය යුතුයි.' });
-            continue;
-          }
-          await sock.groupParticipantsUpdate(jid, [mentioned[0]], 'remove');
-        }
-      } catch (error) {
-        console.error('Command error:', error.message);
+      console.log('[RAW MSG]', JSON.stringify({
+        remoteJid: msg.key.remoteJid,
+        fromMe: msg.key.fromMe,
+        id: msg.key.id,
+        participant: msg.key.participant
+      }));
+      
+      // Message එකක් නැත්නම් Skip කරන්න
+      if (!msg.message) {
+        console.log('[SKIP] No message content');
+        continue;
       }
+      
+      // RemoteJid එකක් නැත්නම් Skip කරන්න
+      if (!msg.key.remoteJid) {
+        console.log('[SKIP] No remoteJid');
+        continue;
+      }
+      
+      // Status Broadcast Skip කරන්න
+      if (msg.key.remoteJid === 'status@broadcast') {
+        console.log('[SKIP] Status broadcast');
+        continue;
+      }
+      
+      // Group Messages Allow කරන්න
+      const isGroup = msg.key.remoteJid.endsWith('@g.us');
+      
+      // Group එකක් නම් සහ allowGroup false නම් Skip කරන්න
+      if (isGroup && !config.allowGroup) {
+        console.log('[SKIP] Group messages not allowed');
+        continue;
+      }
+      
+      // Self Messages Allow කරන්න
+      if (msg.key.fromMe && !config.allowSelf) {
+        console.log('[SKIP] Self messages not allowed');
+        continue;
+      }
+      
+      console.log('[MESSAGE]', msg.key.remoteJid);
+      
+      // Message Text එක Extract කරන්න
+      let text = '';
+      
+      // Conversation Message
+      if (msg.message.conversation) {
+        text = msg.message.conversation;
+      }
+      // Extended Text Message (Reply/Forward)
+      else if (msg.message.extendedTextMessage?.text) {
+        text = msg.message.extendedTextMessage.text;
+      }
+      // Image Message Caption
+      else if (msg.message.imageMessage?.caption) {
+        text = msg.message.imageMessage.caption;
+      }
+      // Video Message Caption
+      else if (msg.message.videoMessage?.caption) {
+        text = msg.message.videoMessage.caption;
+      }
+      // Document Message Caption
+      else if (msg.message.documentMessage?.caption) {
+        text = msg.message.documentMessage.caption;
+      }
+      // Buttons Response
+      else if (msg.message.buttonsResponseMessage?.selectedButtonId) {
+        text = msg.message.buttonsResponseMessage.selectedButtonId;
+      }
+      // List Response
+      else if (msg.message.listResponseMessage?.singleSelectReply?.selectedRowId) {
+        text = msg.message.listResponseMessage.singleSelectReply.selectedRowId;
+      }
+      
+      if (!text) {
+        console.log('[SKIP] No text content');
+        continue;
+      }
+      
+      text = text.trim();
+      console.log('[TEXT]', text);
+      
+      // Prefix Check කරන්න
+      if (!text.startsWith(config.prefix)) {
+        console.log('[SKIP] No prefix');
+        continue;
+      }
+      
+      // Command එක Extract කරන්න
+      const args = text.slice(config.prefix.length).trim().split(/\s+/);
+      const command = args[0].toLowerCase();
+      
+      console.log('[COMMAND]', command);
+      
+      // Command එක Handle කරන්න
+      await handleCommand(sock, msg, command, args.slice(1));
     }
   });
 }
 
-startBot().catch(error => {
-  global.botStatus = 'Error 🔴'
-  console.error('Startup error:', error)
-})
+startBot().catch(err => {
+  console.error('❌ Bot Start වුනේ නෑ:', err);
+  process.exit(1);
+});
