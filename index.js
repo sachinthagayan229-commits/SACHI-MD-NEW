@@ -27,41 +27,39 @@ app.listen(10000, () => {
   console.log('Dashboard started on port 10000');
 });
 
-async function startBot() {
-  const sessionId = process.env.SESSION_ID;
-  const sessionDir = './session';
-  
-  if (!fs.existsSync(sessionDir)) {
-    fs.mkdirSync(sessionDir, { recursive: true });
-  }
-  
-  // SESSION_ID එකෙන් Session එක Load කරන්න
-  if (sessionId) {
-    try {
-      console.log('🔄 SESSION_ID එකෙන් Session එක Load කරනවා...');
-      
-      let cleanId = sessionId.trim();
-      // SACHI-MD~ තියෙනවා නම් අයින් කරන්න
-      if (cleanId.includes('~')) {
-        cleanId = cleanId.split('~')[1];
-      } else if (cleanId.includes(':')) {
-        cleanId = cleanId.split(':')[1];
-      }
-      
-      // Base64 Decode කරන්න
-      const decoded = Buffer.from(cleanId, 'base64').toString('utf-8');
-      const credsData = JSON.parse(decoded);
-      
-      fs.writeFileSync(
-        path.join(sessionDir, 'creds.json'),
-        JSON.stringify(credsData, BufferJSON.replacer, 2)
-      );
-      console.log('✅ SESSION_ID එකෙන් Session එක Load වුනා!');
-    } catch (error) {
-      console.log('❌ Session Load වුනේ නෑ:', error.message);
+// SESSION_ID එකෙන් Session එක Load කරන්න
+const sessionDir = './session';
+
+if (!fs.existsSync(sessionDir)) {
+  fs.mkdirSync(sessionDir, { recursive: true });
+}
+
+const sessionId = process.env.SESSION_ID;
+if (sessionId) {
+  try {
+    console.log('🔄 SESSION_ID එකෙන් Session එක Load කරනවා...');
+    
+    let cleanId = sessionId.trim();
+    if (cleanId.includes('~')) {
+      cleanId = cleanId.split('~')[1];
+    } else if (cleanId.includes(':')) {
+      cleanId = cleanId.split(':')[1];
     }
+    
+    const decoded = Buffer.from(cleanId, 'base64').toString('utf-8');
+    const credsData = JSON.parse(decoded);
+    
+    fs.writeFileSync(
+      path.join(sessionDir, 'creds.json'),
+      JSON.stringify(credsData, BufferJSON.replacer, 2)
+    );
+    console.log('✅ SESSION_ID එකෙන් Session එක Load වුනා!');
+  } catch (error) {
+    console.log('❌ Session Load වුනේ නෑ:', error.message);
   }
-  
+}
+
+async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
   
   const { version } = await fetchLatestBaileysVersion();
@@ -98,9 +96,18 @@ async function startBot() {
     }
     
     if (connection === 'close') {
-      const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-      console.log(`Connection closed. Reconnecting: ${shouldReconnect}`);
-      if (shouldReconnect) {
+      const statusCode = lastDisconnect?.error?.output?.statusCode;
+      console.log(`Connection closed. Status: ${statusCode}`);
+      
+      if (statusCode === DisconnectReason.loggedOut) {
+        console.log('❌ Session එක Expired! අලුත් SESSION_ID එකක් ඕනේ!');
+        console.log('🔄 10 Seconds වලින් Reconnect කරනවා...');
+        setTimeout(startBot, 10000);
+      } else if (statusCode === DisconnectReason.badSession) {
+        console.log('❌ Bad Session! Session එක Delete කරන්න ඕනේ!');
+        setTimeout(startBot, 5000);
+      } else {
+        console.log('🔄 Reconnecting in 5 seconds...');
         setTimeout(startBot, 5000);
       }
     } else if (connection === 'open') {
