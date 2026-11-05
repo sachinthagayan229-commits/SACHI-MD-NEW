@@ -1,8 +1,10 @@
-import makeWASocket, {
+import pkg from '@whiskeysockets/baileys';
+const {
+  default: makeWASocket,
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion
-} from '@whiskeysockets/baileys'
+} = pkg;
 
 import pino from 'pino'
 import express from 'express'
