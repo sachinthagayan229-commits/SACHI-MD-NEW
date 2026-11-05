@@ -20,19 +20,18 @@ if (process.env.SESSION_ID) {
       fs.mkdirSync(sessionDir, { recursive: true });
     }
 
-    let sessionContent = process.env.SESSION_ID;
-    try {
-      sessionContent = Buffer.from(sessionContent, 'base64').toString('utf8');
-    } catch (e) {}
-
-    try {
-      JSON.parse(sessionContent);
-      fs.writeFileSync(path.join(sessionDir, 'creds.json'), sessionContent);
-      console.log('✅ SESSION_ID එකෙන් Session එක Load වුනා!');
-    } catch (e) {
-      fs.writeFileSync(path.join(sessionDir, 'session.txt'), sessionContent);
-      console.log('✅ SESSION_ID එක Load වුනා (Text Format)');
+    let raw = process.env.SESSION_ID.trim();
+    // SACHI-MD~ Prefix එක අයින් කරන්න
+    if (raw.startsWith('SACHI-MD~')) {
+      raw = raw.replace('SACHI-MD~', '');
     }
+
+    // Base64 Decode කරන්න
+    let decoded = Buffer.from(raw, 'base64').toString('utf8');
+    // JSON එකක්ද බලන්න
+    JSON.parse(decoded);
+    fs.writeFileSync(path.join(sessionDir, 'creds.json'), decoded);
+    console.log('✅ SESSION_ID එකෙන් Session එක Load වුනා!');
   } catch (err) {
     console.error('❌ Session Load Error:', err);
   }
